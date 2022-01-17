@@ -6,9 +6,6 @@ module Draftsman
           :set_draftsman_enabled_for_controller,
           :set_draftsman_controller_info
         ]
-        after = [
-          :warn_about_not_setting_whodunnit
-        ]
         if base.respond_to? :before_action
           # Rails 4+
           before.map { |sym| base.before_action sym }
@@ -81,21 +78,6 @@ module Draftsman
       # alongside any changes that occur.
       def set_draftsman_controller_info
         ::Draftsman.controller_info = info_for_draftsman
-      end
-
-      def warn_about_not_setting_whodunnit
-        enabled = ::Draftsman.enabled_for_controller?
-        user_present = user_for_draftsman.present?
-        whodunnit_blank = ::Draftsman.whodunnit.blank?
-        if enabled && user_present && whodunnit_blank && !@set_draftsman_whodunnit_called
-          ::Kernel.warn <<-EOS.strip_heredoc
-            user_for_draftsman is present, but whodunnit has not been set.
-            Draftsman no longer adds the set_draftsman_whodunnit callback for
-            you. To continue recording whodunnit, please add this before_action
-            callback to your ApplicationController . For more information,
-            please see https://git.io/vrTsk
-          EOS
-        end
       end
     end
   end
