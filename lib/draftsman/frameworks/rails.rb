@@ -9,11 +9,9 @@ module Draftsman
         if base.respond_to? :before_action
           # Rails 4+
           before.map { |sym| base.before_action sym }
-          after.map  { |sym| base.after_action  sym }
         else
           # Rails 3.
           before.map { |sym| base.before_filter sym }
-          after.map  { |sym| base.after_filter  sym }
         end
       end
 
