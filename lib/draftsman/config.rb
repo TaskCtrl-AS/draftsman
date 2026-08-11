@@ -3,12 +3,14 @@ require 'singleton'
 module Draftsman
   class Config
     include Singleton
-    attr_accessor :serializer, :timestamp_field, :whodunnit_field, :stash_drafted_changes
+    attr_accessor :draft_class_name, :serializer, :timestamp_field, :whodunnit_field,
+                  :stash_drafted_changes
     alias :stash_drafted_changes? :stash_drafted_changes
 
     def initialize
       @timestamp_field = :created_at
       @mutex = Mutex.new
+      @draft_class_name = 'Draftsman::Draft'
       @serializer = Draftsman::Serializers::Yaml
       @enabled = true
       @whodunnit_field = :whodunnit

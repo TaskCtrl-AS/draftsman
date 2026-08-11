@@ -21,13 +21,13 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'appraisal'
   s.add_development_dependency 'rake'
   s.add_development_dependency 'railties', ['>= 4.2', '< 9.0']
-  s.add_development_dependency 'sinatra', ['>= 1.0', '<3']
-  s.add_development_dependency 'rspec-rails', '~> 3.5'
+  s.add_development_dependency 'sinatra', ['>= 1.0', '< 5']
+  s.add_development_dependency 'rspec-rails', '>= 4.0'
 
   # JRuby support for the test ENV
   if defined?(JRUBY_VERSION)
     s.add_development_dependency 'activerecord-jdbcsqlite3-adapter', ['>= 1.3.0.rc1', '< 1.4']
   else
-    s.add_development_dependency 'sqlite3', '~> 1.2'
+    s.add_development_dependency 'sqlite3', ['>= 1.2', '< 3']
   end
 end

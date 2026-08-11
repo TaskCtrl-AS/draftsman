@@ -55,12 +55,12 @@ module Draftsman
 
   # Returns default class name used for drafts.
   def self.draft_class_name
-    draftsman_store[:draft_class_name]
+    Draftsman.config.draft_class_name
   end
 
   # Sets default class name to use for drafts.
   def self.draft_class_name=(class_name)
-    draftsman_store[:draft_class_name] = class_name
+    Draftsman.config.draft_class_name = class_name
   end
 
   # Set the field which records when a draft was created.
@@ -119,9 +119,15 @@ module Draftsman
 
 private
 
-  # Thread-safe hash to hold Draftman's data. Initializing with needed default values.
+  # Per-execution store for request-scoped data. `Thread.current[]` is
+  # fiber-local, so state set before a fiber or thread boundary is invisible
+  # after it; Rails' own isolation level is `:thread`.
   def self.draftsman_store
-    Thread.current[:draft] ||= { draft_class_name: 'Draftsman::Draft' }
+    if defined?(ActiveSupport::IsolatedExecutionState)
+      ActiveSupport::IsolatedExecutionState[:draftsman] ||= {}
+    else
+      Thread.current[:draft] ||= {}
+    end
   end
 
   # Returns Draftman's configuration object.
@@ -140,11 +146,4 @@ require 'draftsman/draft'
 # Inject `Draftsman::Model` into ActiveRecord classes.
 ActiveSupport.on_load(:active_record) do
   include Draftsman::Model
-end
-
-# Inject `Draftsman::Rails::Controller` into Rails controllers.
-if defined?(ActionController)
-  ActiveSupport.on_load(:action_controller) do
-    include Draftsman::Rails::Controller
-  end
 end
