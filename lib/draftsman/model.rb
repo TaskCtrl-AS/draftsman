@@ -207,7 +207,9 @@ module Draftsman
       # and the save was successful.
       def save_draft
         run_callbacks :save_draft do
-          if self.new_record?
+          if !Draftsman.drafting_enabled?
+            save
+          elsif self.new_record?
             _draft_creation
           else
             _draft_update
