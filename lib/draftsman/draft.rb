@@ -20,23 +20,31 @@ class Draftsman::Draft < ActiveRecord::Base
   # Returns whether the `object` column is using the `json` type supported by
   # PostgreSQL.
   def self.object_col_is_json?
-    @object_col_is_json ||= Draftsman.stash_drafted_changes? && columns_hash['object'].type == :json
+    Draftsman.stash_drafted_changes? && draftsman_col_type('object') == :json
   end
 
   # Returns whether or not this class has an `object_changes` column.
   def self.object_changes_col_present?
-    column_names.include?('object_changes')
+    return @object_changes_col_present if defined?(@object_changes_col_present)
+    @object_changes_col_present = column_names.include?('object_changes')
   end
 
   # Returns whether the `object_changes` column is using the `json` type
   # supported by PostgreSQL.
   def self.object_changes_col_is_json?
-    @object_changes_col_is_json ||= columns_hash['object_changes'].type == :json
+    draftsman_col_type('object_changes') == :json
   end
 
   # Returns whether the `previous_draft` column is using the `json` type supported by PostgreSQL.
   def self.previous_draft_col_is_json?
-    @previous_draft_col_is_json ||= columns_hash['previous_draft'].type == :json
+    draftsman_col_type('previous_draft') == :json
+  end
+
+  # Memoized column type lookup. `||=` would not cache a `nil` or `false`.
+  def self.draftsman_col_type(name)
+    @draftsman_col_types ||= {}
+    return @draftsman_col_types[name] if @draftsman_col_types.key?(name)
+    @draftsman_col_types[name] = columns_hash[name]&.type
   end
 
   # Returns what changed in this draft. Similar to `ActiveModel::Dirty#changes`.

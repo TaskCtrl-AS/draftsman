@@ -409,10 +409,12 @@ module Draftsman
         # If there's already an update draft, get its changes and reconcile them
         # manually.
         if event == :update
+          draft_changeset = self.draft? ? send(self.class.draft_association_name).changeset : nil
+
           # Collect all attributes' previous and new values.
           draftable_attrs.each do |attr|
-            if self.draft? && self.draft.changeset && self.draft.changeset.key?(attr)
-              the_changes[attr] = [self.draft.changeset[attr].first, send(attr)]
+            if draft_changeset && draft_changeset.key?(attr)
+              the_changes[attr] = [draft_changeset[attr].first, send(attr)]
             else
               the_changes[attr] = [self.send("#{attr}_was"), send(attr)]
             end
@@ -472,7 +474,7 @@ module Draftsman
 
       # Returns whether or not the draft class includes an `object_changes` attribute.
       def track_object_changes_for_draft?
-        self.class.draft_class.column_names.include?('object_changes')
+        self.class.draft_class.object_changes_col_present?
       end
 
       # Sets `trashed_at` attribute to now and saves to the database immediately.
