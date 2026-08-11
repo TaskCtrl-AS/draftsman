@@ -18,11 +18,7 @@ module Draftsman
       ].freeze
 
       def load(string)
-        if YAML.method(:load).parameters.any? { |_type, name| name == :permitted_classes }
-          YAML.load(string, permitted_classes: permitted_classes, aliases: true)
-        else
-          YAML.load(string)
-        end
+        YAML.load(string, permitted_classes: permitted_classes, aliases: true)
       end
 
       def dump(object)
@@ -46,15 +42,7 @@ module Draftsman
       end
 
       def active_record_permitted_classes
-        if ActiveRecord.respond_to?(:yaml_column_permitted_classes)
-          # Rails 7.1+
-          ActiveRecord.yaml_column_permitted_classes
-        elsif ActiveRecord::Base.respond_to?(:yaml_column_permitted_classes)
-          # Rails 7.0
-          ActiveRecord::Base.yaml_column_permitted_classes
-        else
-          []
-        end
+        ActiveRecord.yaml_column_permitted_classes
       end
     end
   end

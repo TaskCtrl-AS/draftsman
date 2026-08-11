@@ -18,7 +18,7 @@ module Draftsman
     # method, e.g. `current_person`, or anything you like.
     def user_for_draftsman
       return unless defined?(current_user)
-      ActiveSupport::VERSION::MAJOR >= 4 ? current_user.try!(:id) : current_user.try(:id)
+      current_user.try!(:id)
     rescue NoMethodError
       current_user
     end

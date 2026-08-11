@@ -6,13 +6,7 @@ module Draftsman
           :set_draftsman_enabled_for_controller,
           :set_draftsman_controller_info
         ]
-        if base.respond_to? :before_action
-          # Rails 4+
-          before.map { |sym| base.before_action sym }
-        else
-          # Rails 3.
-          before.map { |sym| base.before_filter sym }
-        end
+        before.map { |sym| base.before_action sym }
       end
 
     protected
@@ -24,7 +18,7 @@ module Draftsman
       # method, e.g. `current_person`, or anything you like.
       def user_for_draftsman
         return unless defined?(current_user)
-        ActiveSupport::VERSION::MAJOR >= 4 ? current_user.try!(:id) : current_user.try(:id)
+        current_user.try!(:id)
       rescue NoMethodError
         current_user
       end

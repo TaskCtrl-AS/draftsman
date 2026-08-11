@@ -1,59 +1,12 @@
 module Draftsman
   module AttributesSerialization
-    class NoOpAttribute
-      def type_cast_for_database(value)
-        value
-      end
-
-      def type_cast_from_database(data)
-        data
-      end
-    end
-    NO_OP_ATTRIBUTE = NoOpAttribute.new
-
-    class SerializedAttribute
-      def initialize(coder)
-        @coder = coder.respond_to?(:dump) ? coder : Draftsman.serializer
-      end
-
-      def type_cast_for_database(value)
-        @coder.dump(value)
-      end
-
-      def type_cast_from_database(data)
-        @coder.load(data)
-      end
-    end
-
-    SERIALIZE, DESERIALIZE =
-      if ::ActiveRecord::VERSION::MAJOR >= 5
-        [:serialize, :deserialize]
-      else
-        [:type_cast_for_database, :type_cast_from_database]
-      end
-
-    if ::ActiveRecord::VERSION::STRING < '4.2'
-      # Backport Rails 4.2 and later's `type_for_attribute` to build
-      # on a common interface.
-      def type_for_attribute(attr_name)
-        serialized_attribute_types[attr_name.to_s] || NO_OP_ATTRIBUTE
-      end
-
-      def serialized_attribute_types
-        @attribute_types ||= Hash[serialized_attributes.map do |attr_name, coder|
-          [attr_name, SerializedAttribute.new(coder)]
-        end]
-      end
-      private :serialized_attribute_types
-    end
-
     # Used for `Version#object` attribute.
     def serialize_attributes_for_draftsman(attributes)
-      alter_attributes_for_draftsman(SERIALIZE, attributes)
+      alter_attributes_for_draftsman(:serialize, attributes)
     end
 
     def unserialize_attributes_for_draftsman(attributes)
-      alter_attributes_for_draftsman(DESERIALIZE, attributes)
+      alter_attributes_for_draftsman(:deserialize, attributes)
     end
 
     def alter_attributes_for_draftsman(serializer, attributes)
@@ -68,11 +21,11 @@ module Draftsman
 
     # Used for Version#object_changes attribute.
     def serialize_draft_attribute_changes(changes)
-      alter_draft_attribute_changes(SERIALIZE, changes)
+      alter_draft_attribute_changes(:serialize, changes)
     end
 
     def unserialize_draft_attribute_changes(changes)
-      alter_draft_attribute_changes(DESERIALIZE, changes)
+      alter_draft_attribute_changes(:deserialize, changes)
     end
 
     def alter_draft_attribute_changes(serializer, changes)
