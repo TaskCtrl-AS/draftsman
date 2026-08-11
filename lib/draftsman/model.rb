@@ -230,11 +230,13 @@ module Draftsman
       # `true` or `false` depending on whether or not the objects passed
       # validation and the save was successful.
       def _draft_creation
+        succeeded = false
+
         transaction do
           # TODO: Remove callback wrapper in v1.0.
           run_callbacks :draft_creation do
             # We want to save the draft after create
-            return false unless self.save
+            next unless self.save
 
             # Build data to store in draft record.
             data = {
@@ -251,13 +253,14 @@ module Draftsman
               fk = "#{self.class.draft_association_name}_id"
               id = send(self.class.draft_association_name).id
               self.update_column(fk, id)
+              succeeded = true
             else
-              raise ActiveRecord::Rollback and return false
+              raise ActiveRecord::Rollback
             end
           end
         end
 
-        return true
+        succeeded
       end
 
       # This is only abstracted away at this moment because of the
@@ -389,7 +392,7 @@ module Draftsman
             end
           end
         end
-      rescue Exception => e
+      rescue StandardError
         false
       end
 

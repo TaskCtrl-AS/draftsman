@@ -14,7 +14,7 @@ class Draftsman::Draft < ActiveRecord::Base
   scope :updates,  -> { where(event: :update) }
 
   def self.with_item_keys(item_type, item_id)
-    scoped conditions: { item_type: item_type, item_id: item_id }
+    where(item_type: item_type, item_id: item_id)
   end
 
   # Returns whether the `object` column is using the `json` type supported by
@@ -328,11 +328,11 @@ private
   end
 
   def load_changeset
-    changes = HashWithIndifferentAccess.new(object_changes_deserialized)
+    return {} if self.object_changes.blank?
+
+    changes = ActiveSupport::HashWithIndifferentAccess.new(object_changes_deserialized)
     self.item_type.constantize.unserialize_draft_attribute_changes(changes)
     changes
-  rescue
-    {}
   end
 
   def object_changes_deserialized
