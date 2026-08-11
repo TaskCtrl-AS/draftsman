@@ -85,4 +85,13 @@ module Draftsman
       include ::Draftsman::Rails::Controller
     end
   end
+
+  if defined?(::Rails::Railtie)
+    class Railtie < ::Rails::Railtie
+      initializer 'draftsman.clear_store' do |app|
+        app.executor.to_run { ::Draftsman.clear_store! }
+        app.executor.to_complete { ::Draftsman.clear_store! }
+      end
+    end
+  end
 end
