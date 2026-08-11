@@ -14,29 +14,37 @@ class Draftsman::Draft < ActiveRecord::Base
   scope :updates,  -> { where(event: :update) }
 
   def self.with_item_keys(item_type, item_id)
-    scoped conditions: { item_type: item_type, item_id: item_id }
+    where(item_type: item_type, item_id: item_id)
   end
 
   # Returns whether the `object` column is using the `json` type supported by
   # PostgreSQL.
   def self.object_col_is_json?
-    @object_col_is_json ||= Draftsman.stash_drafted_changes? && columns_hash['object'].type == :json
+    Draftsman.stash_drafted_changes? && draftsman_col_type('object') == :json
   end
 
   # Returns whether or not this class has an `object_changes` column.
   def self.object_changes_col_present?
-    column_names.include?('object_changes')
+    return @object_changes_col_present if defined?(@object_changes_col_present)
+    @object_changes_col_present = column_names.include?('object_changes')
   end
 
   # Returns whether the `object_changes` column is using the `json` type
   # supported by PostgreSQL.
   def self.object_changes_col_is_json?
-    @object_changes_col_is_json ||= columns_hash['object_changes'].type == :json
+    draftsman_col_type('object_changes') == :json
   end
 
   # Returns whether the `previous_draft` column is using the `json` type supported by PostgreSQL.
   def self.previous_draft_col_is_json?
-    @previous_draft_col_is_json ||= columns_hash['previous_draft'].type == :json
+    draftsman_col_type('previous_draft') == :json
+  end
+
+  # Memoized column type lookup. `||=` would not cache a `nil` or `false`.
+  def self.draftsman_col_type(name)
+    @draftsman_col_types ||= {}
+    return @draftsman_col_types[name] if @draftsman_col_types.key?(name)
+    @draftsman_col_types[name] = columns_hash[name]&.type
   end
 
   # Returns what changed in this draft. Similar to `ActiveModel::Dirty#changes`.
@@ -328,11 +336,11 @@ private
   end
 
   def load_changeset
-    changes = HashWithIndifferentAccess.new(object_changes_deserialized)
+    return {} if self.object_changes.blank?
+
+    changes = ActiveSupport::HashWithIndifferentAccess.new(object_changes_deserialized)
     self.item_type.constantize.unserialize_draft_attribute_changes(changes)
     changes
-  rescue
-    {}
   end
 
   def object_changes_deserialized

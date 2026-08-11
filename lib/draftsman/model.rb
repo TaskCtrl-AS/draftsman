@@ -230,11 +230,13 @@ module Draftsman
       # `true` or `false` depending on whether or not the objects passed
       # validation and the save was successful.
       def _draft_creation
+        succeeded = false
+
         transaction do
           # TODO: Remove callback wrapper in v1.0.
           run_callbacks :draft_creation do
             # We want to save the draft after create
-            return false unless self.save
+            next unless self.save
 
             # Build data to store in draft record.
             data = {
@@ -251,13 +253,14 @@ module Draftsman
               fk = "#{self.class.draft_association_name}_id"
               id = send(self.class.draft_association_name).id
               self.update_column(fk, id)
+              succeeded = true
             else
-              raise ActiveRecord::Rollback and return false
+              raise ActiveRecord::Rollback
             end
           end
         end
 
-        return true
+        succeeded
       end
 
       # This is only abstracted away at this moment because of the
@@ -389,7 +392,7 @@ module Draftsman
             end
           end
         end
-      rescue Exception => e
+      rescue StandardError
         false
       end
 
@@ -406,10 +409,12 @@ module Draftsman
         # If there's already an update draft, get its changes and reconcile them
         # manually.
         if event == :update
+          draft_changeset = self.draft? ? send(self.class.draft_association_name).changeset : nil
+
           # Collect all attributes' previous and new values.
           draftable_attrs.each do |attr|
-            if self.draft? && self.draft.changeset && self.draft.changeset.key?(attr)
-              the_changes[attr] = [self.draft.changeset[attr].first, send(attr)]
+            if draft_changeset && draft_changeset.key?(attr)
+              the_changes[attr] = [draft_changeset[attr].first, send(attr)]
             else
               the_changes[attr] = [self.send("#{attr}_was"), send(attr)]
             end
@@ -469,7 +474,7 @@ module Draftsman
 
       # Returns whether or not the draft class includes an `object_changes` attribute.
       def track_object_changes_for_draft?
-        self.class.draft_class.column_names.include?('object_changes')
+        self.class.draft_class.object_changes_col_present?
       end
 
       # Sets `trashed_at` attribute to now and saves to the database immediately.
