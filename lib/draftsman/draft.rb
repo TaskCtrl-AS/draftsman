@@ -17,6 +17,12 @@ class Draftsman::Draft < ActiveRecord::Base
     where(item_type: item_type, item_id: item_id)
   end
 
+  # Reads an item's draft through its configured association name, which is not
+  # always `draft`.
+  def self.draft_for(item)
+    item.send(item.class.draft_association_name)
+  end
+
   # Returns whether the `object` column is using the `json` type supported by
   # PostgreSQL.
   def self.object_col_is_json?
@@ -72,7 +78,7 @@ class Draftsman::Draft < ActiveRecord::Base
 
     my_item =
       if Draftsman.stash_drafted_changes? && self.item.draft?
-        self.item.draft.reify
+        self.class.draft_for(self.item).reify
       else
         self.item
       end
@@ -91,7 +97,11 @@ class Draftsman::Draft < ActiveRecord::Base
 
         if association_class.draftable? && association.name != association_class.draft_association_name.to_sym
           dependency = my_item.send(association.name)
-          dependencies << dependency.draft if dependency.present? && dependency.draft? && dependency.draft.create?
+
+          if dependency.present? && dependency.draft?
+            dependency_draft = self.class.draft_for(dependency)
+            dependencies << dependency_draft if dependency_draft.create?
+          end
         end
       end
     when :destroy
@@ -109,7 +119,7 @@ class Draftsman::Draft < ActiveRecord::Base
             end
 
           associated_dependencies.each do |dependency|
-            dependencies << dependency.draft if dependency.draft?
+            dependencies << self.class.draft_for(dependency) if dependency.draft?
           end
         end
       end
@@ -140,7 +150,7 @@ class Draftsman::Draft < ActiveRecord::Base
             end
 
           associated_dependencies.each do |dependency|
-            dependencies << dependency.draft if dependency.draft?
+            dependencies << self.class.draft_for(dependency) if dependency.draft?
           end
         end
       end
@@ -157,7 +167,10 @@ class Draftsman::Draft < ActiveRecord::Base
 
         if association_class.draftable? && association_class.trashable? && association.name != association_class.draft_association_name.to_sym
           dependency = self.item.send(association.name)
-          dependencies << dependency.draft if dependency.present? && dependency.draft? && dependency.draft.destroy?
+          if dependency.present? && dependency.draft?
+            dependency_draft = self.class.draft_for(dependency)
+            dependencies << dependency_draft if dependency_draft.destroy?
+          end
         end
       end
     end
@@ -177,11 +190,20 @@ class Draftsman::Draft < ActiveRecord::Base
   # -  A hash of options that get merged with `publish_options` defined in
   #    `has_drafts` and passed to `item.save`.
   def publish!(**options)
+    publish_draft!(Set.new, **options)
+  end
+
+  # Publishes this draft, tracking which drafts have already been visited so a
+  # dependency cycle terminates instead of recursing forever.
+  def publish_draft!(visited, **options)
+    return if visited.include?(self.id)
+    visited << self.id
+
     ActiveRecord::Base.transaction do
       case self.event.to_sym
       when :create, :update
         # Parents must be published too
-        self.draft_publication_dependencies.each { |dependency| dependency.publish! }
+        self.draft_publication_dependencies.each { |dependency| dependency.publish_draft!(visited) }
 
         # Update drafts need to copy over data to main record
         self.item.attributes = self.reify.attributes if Draftsman.stash_drafted_changes? && self.update?
@@ -262,6 +284,15 @@ class Draftsman::Draft < ActiveRecord::Base
   #    timestamp on the item. If a previous draft was drafted for destroy,
   #    restores the draft.
   def revert!
+    revert_draft!(Set.new)
+  end
+
+  # Reverts this draft, tracking which drafts have already been visited so a
+  # dependency cycle terminates instead of recursing forever.
+  def revert_draft!(visited)
+    return if visited.include?(self.id)
+    visited << self.id
+
     ActiveRecord::Base.transaction do
       case self.event.to_sym
       when :create
@@ -282,7 +313,7 @@ class Draftsman::Draft < ActiveRecord::Base
         self.destroy
       when :destroy
         # Parents must be restored too
-        self.draft_reversion_dependencies.each { |dependency| dependency.revert! }
+        self.draft_reversion_dependencies.each { |dependency| dependency.revert_draft!(visited) }
 
         # Restore previous draft if one was stashed away
         if self.previous_draft.present?
