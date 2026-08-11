@@ -117,6 +117,13 @@ module Draftsman
     Draftsman.config.whodunnit_field = field_name
   end
 
+  # Discards request-scoped data (`whodunnit`, `controller_info`, and the
+  # per-request enabled flag). In Rails this runs around each execution so one
+  # request cannot inherit another's values.
+  def self.clear_store!
+    draftsman_store.clear
+  end
+
 private
 
   # Per-execution store for request-scoped data. `Thread.current[]` is
