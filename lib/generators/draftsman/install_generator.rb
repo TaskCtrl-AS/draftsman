@@ -17,7 +17,7 @@ module Draftsman
     def create_migration_file
 
       config = {
-        api_version: activerecord_migrations_versioned? ? '[4.2]' : ''
+        api_version: activerecord_migrations_versioned? ? "[#{ActiveRecord::VERSION::MAJOR}.#{ActiveRecord::VERSION::MINOR}]" : ''
       }
 
       if options.with_pg_json?
