@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby }} / ${{ matrix.gemfile }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.2', '3.3', '3.4']
+        gemfile:
+          - gemfiles/activerecord_7.1.gemfile
+          - gemfiles/activerecord_7.2.gemfile
+          - gemfiles/activerecord_8.0.gemfile
+        include:
+          # Latest released Rails, via the gemspec's own dependency range.
+          - ruby: '3.4'
+            gemfile: Gemfile
+
+    env:
+      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
+      RAILS_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Load the dummy app schema
+        run: bundle exec rake -f spec/dummy/Rakefile db:schema:load
+
+      - name: Run specs
+        run: bundle exec rspec
