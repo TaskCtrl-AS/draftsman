@@ -2,7 +2,7 @@ class CreateDrafts < ActiveRecord::Migration<%= config[:api_version] %>
   def change
     create_table :drafts do |t|
       t.string  :item_type, :null => false
-      t.integer :item_id,   :null => false
+      t.bigint  :item_id,   :null => false
       t.string  :event,     :null => false
       t.string  :whodunnit#  :null => false
       t.json    :object
