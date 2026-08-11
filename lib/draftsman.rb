@@ -141,10 +141,3 @@ require 'draftsman/draft'
 ActiveSupport.on_load(:active_record) do
   include Draftsman::Model
 end
-
-# Inject `Draftsman::Rails::Controller` into Rails controllers.
-if defined?(ActionController)
-  ActiveSupport.on_load(:action_controller) do
-    include Draftsman::Rails::Controller
-  end
-end
