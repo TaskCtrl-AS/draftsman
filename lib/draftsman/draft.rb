@@ -1,4 +1,12 @@
 class Draftsman::Draft < ActiveRecord::Base
+  # Raised when stored data cannot be read back. Unreadable data is reported
+  # and skipped; anything else is a real error and still propagates.
+  DESERIALIZATION_ERRORS = [
+    Psych::DisallowedClass,
+    Psych::SyntaxError,
+    JSON::ParserError
+  ].freeze
+
   # Associations
   belongs_to :item, polymorphic: true
 
@@ -372,6 +380,12 @@ private
     changes = ActiveSupport::HashWithIndifferentAccess.new(object_changes_deserialized)
     self.item_type.constantize.unserialize_draft_attribute_changes(changes)
     changes
+  rescue *DESERIALIZATION_ERRORS => e
+    logger&.warn(
+      "Draftsman could not parse `object_changes` for #{self.item_type}##{self.item_id} " \
+      "(Draft ID: #{self.id}): #{e.class}: #{e.message}"
+    )
+    {}
   end
 
   def object_changes_deserialized
