@@ -36,6 +36,15 @@ module Draftsman
     !!draftsman_store[:request_enabled_for_controller]
   end
 
+  # Returns whether `#save_draft` should record a draft right now. The
+  # per-request switch is only consulted when a request has actually set it,
+  # so drafting still works outside a request.
+  def self.drafting_enabled?
+    return false unless enabled?
+    return enabled_for_controller? if draftsman_store.key?(:request_enabled_for_controller)
+    true
+  end
+
   # Returns any information from the controller that you want Draftsman to store.
   #
   # See `Draftsman::Controller#info_for_draftsman`.
