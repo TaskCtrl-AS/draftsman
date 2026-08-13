@@ -2,8 +2,6 @@ require 'rails/generators'
 require 'rails/generators/migration'
 require 'rails/generators/active_record'
 
-require 'support/feature_detection'
-
 module Draftsman
   class InstallGenerator < ::Rails::Generators::Base
     include ::Rails::Generators::Migration
@@ -17,7 +15,7 @@ module Draftsman
     def create_migration_file
 
       config = {
-        api_version: activerecord_migrations_versioned? ? "[#{ActiveRecord::VERSION::MAJOR}.#{ActiveRecord::VERSION::MINOR}]" : ''
+        api_version: "[#{ActiveRecord::VERSION::MAJOR}.#{ActiveRecord::VERSION::MINOR}]"
       }
 
       if options.with_pg_json?

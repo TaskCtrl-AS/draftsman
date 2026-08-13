@@ -237,43 +237,41 @@ class Draftsman::Draft < ActiveRecord::Base
       require self.item_type.underscore
     end
 
-    without_identity_map do
-      # Create draft doesn't require reification.
-      if self.create?
-        self.item
-      # If a previous draft is stashed, restore that.
-      elsif self.previous_draft.present?
-        reify_previous_draft.reify
-      # Prefer changeset for refication if it's present.
-      elsif self.changeset.present? && self.changeset.any?
-        self.changeset.each do |key, value|
-          # Skip counter_cache columns
-          if self.item.respond_to?("#{key}=") && !key.end_with?('_count')
-            self.item.send("#{key}=", value.last)
-          elsif !key.end_with?('_count')
-            logger.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
-          end
+    # Create draft doesn't require reification.
+    if self.create?
+      self.item
+    # If a previous draft is stashed, restore that.
+    elsif self.previous_draft.present?
+      reify_previous_draft.reify
+    # Prefer changeset for refication if it's present.
+    elsif self.changeset.present? && self.changeset.any?
+      self.changeset.each do |key, value|
+        # Skip counter_cache columns
+        if self.item.respond_to?("#{key}=") && !key.end_with?('_count')
+          self.item.send("#{key}=", value.last)
+        elsif !key.end_with?('_count')
+          logger.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
         end
-
-        self.item.send("#{self.item.class.draft_association_name}=", self)
-        self.item
-      # Reify based on object if it's all that's available.
-      elsif self.object.present?
-        attrs = self.class.object_col_is_json? ? self.object : Draftsman.serializer.load(self.object)
-        self.item.class.unserialize_attributes_for_draftsman(attrs)
-
-        attrs.each do |key, value|
-          # Skip counter_cache columns
-          if self.item.respond_to?("#{key}=") && !key.end_with?('_count')
-            self.item.send("#{key}=", value)
-          elsif !key.end_with?('_count')
-            logger.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
-          end
-        end
-
-        self.item.send("#{self.item.class.draft_association_name}=", self)
-        self.item
       end
+
+      self.item.send("#{self.item.class.draft_association_name}=", self)
+      self.item
+    # Reify based on object if it's all that's available.
+    elsif self.object.present?
+      attrs = self.class.object_col_is_json? ? self.object : Draftsman.serializer.load(self.object)
+      self.item.class.unserialize_attributes_for_draftsman(attrs)
+
+      attrs.each do |key, value|
+        # Skip counter_cache columns
+        if self.item.respond_to?("#{key}=") && !key.end_with?('_count')
+          self.item.send("#{key}=", value)
+        elsif !key.end_with?('_count')
+          logger.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
+        end
+      end
+
+      self.item.send("#{self.item.class.draft_association_name}=", self)
+      self.item
     end
   end
 
@@ -343,27 +341,17 @@ private
   def reify_previous_draft
     draft = self.class.new
 
-    without_identity_map do
-      attrs = self.class.object_col_is_json? ? self.previous_draft : Draftsman.serializer.load(self.previous_draft)
+    attrs = self.class.object_col_is_json? ? self.previous_draft : Draftsman.serializer.load(self.previous_draft)
 
-      attrs.each do |key, value|
-        if key.to_sym != :id && draft.respond_to?("#{key}=")
-          draft.send("#{key}=", value)
-        elsif key.to_sym != :id
-          logger.warn("Attribute #{key} does not exist on #{item_type} (Draft ID: #{self.id}).")
-        end
+    attrs.each do |key, value|
+      if key.to_sym != :id && draft.respond_to?("#{key}=")
+        draft.send("#{key}=", value)
+      elsif key.to_sym != :id
+        logger.warn("Attribute #{key} does not exist on #{item_type} (Draft ID: #{self.id}).")
       end
     end
 
     draft
-  end
-
-  def without_identity_map(&block)
-    if defined?(ActiveRecord::IdentityMap) && ActiveRecord::IdentityMap.respond_to?(:without)
-      ActiveRecord::IdentityMap.without(&block)
-    else
-      block.call
-    end
   end
 
   def load_changeset

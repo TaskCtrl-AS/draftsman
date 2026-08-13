@@ -15,12 +15,13 @@ Gem::Specification.new do |s|
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   s.require_paths = ['lib']
+  s.required_ruby_version = '>= 3.2'
 
-  s.add_dependency 'activerecord', ['>= 4.2', '< 9.0']
+  s.add_dependency 'activerecord', ['>= 7.1', '< 9.0']
 
   s.add_development_dependency 'appraisal'
   s.add_development_dependency 'rake'
-  s.add_development_dependency 'railties', ['>= 4.2', '< 9.0']
+  s.add_development_dependency 'railties', ['>= 7.1', '< 9.0']
   s.add_development_dependency 'sinatra', ['>= 1.0', '< 5']
   s.add_development_dependency 'rspec-rails', '>= 4.0'
 

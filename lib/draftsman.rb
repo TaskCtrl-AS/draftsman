@@ -36,16 +36,6 @@ module Draftsman
     !!draftsman_store[:request_enabled_for_controller]
   end
 
-  # Returns whether or not ActiveRecord is configured to assume that `belongs_to` associations are required.
-  def self.active_record_belongs_to_required?
-    @active_record_belongs_to_required ||= ActiveRecord::VERSION::STRING.to_f >= 5.0
-  end
-
-  # Returns whether or not ActiveRecord is configured to require mass assignment whitelisting via `attr_accessible`.
-  def self.active_record_protected_attributes?
-    @active_record_protected_attributes ||= ActiveRecord::VERSION::STRING.to_f < 4.0 || defined?(ProtectedAttributes)
-  end
-
   # Returns any information from the controller that you want Draftsman to store.
   #
   # See `Draftsman::Controller#info_for_draftsman`.
@@ -136,11 +126,7 @@ private
   # fiber-local, so state set before a fiber or thread boundary is invisible
   # after it; Rails' own isolation level is `:thread`.
   def self.draftsman_store
-    if defined?(ActiveSupport::IsolatedExecutionState)
-      ActiveSupport::IsolatedExecutionState[:draftsman] ||= {}
-    else
-      Thread.current[:draft] ||= {}
-    end
+    ActiveSupport::IsolatedExecutionState[:draftsman] ||= {}
   end
 
   # Returns Draftman's configuration object.
