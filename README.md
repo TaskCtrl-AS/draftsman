@@ -1,22 +1,21 @@
 # Project status #
 
-🚨 Drfatsman is [looking for a new Steward](https://github.com/jmfederico/draftsman/issues/85) 🚨
+This is a maintained fork of [jmfederico/draftsman][11], which is no longer
+actively developed. It is not published to RubyGems; install it from git (see
+[Installation](#installation)).
 
-# Draftsman v0.8.0.dev
+# Draftsman v0.8.1.dev
 
-[![Build Status](https://travis-ci.org/jmfederico/draftsman.svg?branch=master)](https://travis-ci.org/jmfederico/draftsman)
+[![CI](https://github.com/TaskCtrl-AS/draftsman/actions/workflows/ci.yml/badge.svg)](https://github.com/TaskCtrl-AS/draftsman/actions/workflows/ci.yml)
 
 Draftsman is a Ruby gem that lets you create draft versions of your database
 records. If you're developing a system in need of simple drafts or a publishing
 approval queue, then Draftsman just might be what you need.
 
--  The largest risk at this time is functionality that assists with publishing
-   or reverting dependencies through associations (for example, "publishing" a
-   child also publishes its parent if it's a new item). We'll be putting this
-   functionality through its paces in the coming months.
--  The RSpec tests are lacking in some areas, so I will be adding to those over
-   time as well. (Unfortunately, this gem was not developed with TDD best
-   practices because it was lifted from PaperTrail and modified from there.)
+Test coverage is uneven — the gem was lifted from PaperTrail rather than built
+test-first, and several areas (custom draft association names, dependency
+cycles, the deprecated API) had no specs at all until bugs surfaced there. If
+you are working in an untested corner, add a spec.
 
 This gem is inspired by the [Kentouzu][1] gem, which is based heavily on
 [PaperTrail][2]. In fact, much of the structure for this gem emulates PaperTrail
@@ -34,11 +33,13 @@ Sinatra.
 -  Ability to query drafts based on the current drafted item, or query all
    drafts polymorphically on the `drafts` table.
 -  `publish!` and `revert!` methods for drafts also handle any dependent drafts
-   so you don't end up with orphaned records.
+   so you don't end up with orphaned records, and terminate cleanly if those
+   dependencies reference each other in a cycle.
 -  Allows you to get at every draft, even if the schema has since changed.
--  Automatically records who was responsible via your controller. Draftsman
-   calls `current_user` by default if it exists, but you can have it call any
-   method you like.
+-  Records who was responsible via your controller, once you add the
+   `set_draftsman_whodunnit` filter described under [Installation](#installation).
+   Draftsman calls `current_user` by default if it exists, but you can have it
+   call any method you like.
 -  Allows you to store arbitrary model-level metadata with each draft (useful
    for filtering).
 -  Allows you to store arbitrary controller-level information with each draft
@@ -52,29 +53,38 @@ Sinatra.
 -  Supports custom name for `draft` association.
 -  Supports `before`, `after`, and `around` callbacks on each draft persistence
    method, such as `before_save_draft` or `around_draft_destruction`.
--  Threadsafe.
+-  Request-scoped state (`whodunnit`, controller info) is isolated per
+   execution and cleared between requests and background jobs, so one request
+   cannot inherit another's values.
 
 ## Compatibility
 
-Compatible with ActiveRecord 4, 5, 6.
+Requires **ActiveRecord 7.1 or newer** and **Ruby 3.2 or newer**.
 
-Works well with Rails, Sinatra, or any other application that depends on
-ActiveRecord.
+CI runs the suite against ActiveRecord 7.1, 7.2, and 8.0 on Ruby 3.2, 3.3, and
+3.4, plus the latest ActiveRecord release resolved through the gemspec's own
+dependency range.
+
+Works with Rails, Sinatra, or any other application that depends on
+ActiveRecord. Draftsman does not require `active_record` itself — load it before
+requiring Draftsman, which Rails does for you.
 
 ## Installation
 
-### Rails 4, 5, 6
+### Rails
 
-Add Draftsman to your `Gemfile`.
+Add Draftsman to your `Gemfile`. This fork is not published to RubyGems, so
+install it from git:
 
 ```ruby
-gem 'draftsman', '~> 0.7.1'
+gem 'draftsman', github: 'TaskCtrl-AS/draftsman'
 ```
 
-Or if you want to grab the latest from `master`:
+Pin it to a specific revision if you want to take updates deliberately rather
+than on every `bundle update`:
 
 ```ruby
-gem 'draftsman', github: 'jmfederico/draftsman'
+gem 'draftsman', github: 'TaskCtrl-AS/draftsman', ref: 'abc1234'
 ```
 
 Generate a migration which will add a `drafts` table to your database.
@@ -115,7 +125,7 @@ end
 ### Sinatra
 
 In order to configure Draftsman for usage with [Sinatra][5], your Sinatra app
-must be using `ActiveRecord` 4 or greater. It is also recommended to use the
+must be using `ActiveRecord` 7.1 or greater. It is also recommended to use the
 [Sinatra ActiveRecord Extension][6] or something similar for managing your
 application's ActiveRecord connection in a manner similar to the way Rails does.
 If using the aforementioned Sinatra ActiveRecord Extension, steps for setting up
@@ -124,7 +134,7 @@ your app with Draftsman will look something like this:
 Add Draftsman to your `Gemfile`.
 
 ```ruby
-gem 'draftsman', github: 'jmfederico/draftsman'
+gem 'draftsman', github: 'TaskCtrl-AS/draftsman'
 ```
 
 Generate a migration to add a `drafts` table to your database.
@@ -162,6 +172,13 @@ class MyApp < Sinatra::Base
   register Draftsman::Sinatra
 end
 ```
+
+Note that the Sinatra integration has no automated test coverage. It is
+verified by hand against Sinatra 4.x; treat it as less proven than the Rails
+integration. Unlike Rails, Sinatra has no executor, so Draftsman's
+request-scoped state is not cleared between requests there — the `before`
+filter sets `whodunnit` on each request, but set it explicitly if you have
+paths that bypass that filter.
 
 ## API Summary
 
@@ -324,7 +341,8 @@ draft.update?
 draft.destroy?
 
 # Publishes this draft's associated `item`, publishes its `item`'s dependencies,
-# and destroys itself.
+# and destroys itself. If dependencies reference each other in a cycle, each
+# draft is published once rather than recursing forever.
 # -  For `create` drafts, adds a value for the `published_at` timestamp on the
 #    item and destroys the draft.
 # -  For `update` drafts, applies the drafted changes to the item and destroys
@@ -333,11 +351,13 @@ draft.destroy?
 #
 # Params:
 # -  A hash of options that get merged with `publish_options` defined in
-#    `has_drafts` and passed to `item.save`.
+#    `has_drafts` and passed to `item.save`. Options apply to this draft's item
+#    only, not to its dependencies.
 draft.publish!
 
 # Reverts this draft's associated `item` to its previous state, reverts its
-# `item`'s dependencies, and destroys itself.
+# `item`'s dependencies, and destroys itself. As with `publish!`, a dependency
+# cycle terminates instead of recursing forever.
 # -  For `create` drafts, destroys the draft and the item.
 # -  For `update` drafts, destroys the draft only.
 # -  For `destroy` drafts, destroys the draft and undoes the `trashed_at`
@@ -625,18 +645,19 @@ included, please do the following:
 2.  Run `bundle install`.
 
 3.  Run `RAILS_ENV=test bundle exec rake -f spec/dummy/Rakefile db:schema:load`
-    to load test database schema.
+    to load the test database schema.
 
 4.  Add at least one test for your change. Only refactoring and documentation
     changes require no new tests. If you are adding functionality or fixing a
     bug, you need a test!
 
-5.  Make all tests pass by running `rake`.
+5.  Make all tests pass by running `bundle exec rspec` (or `rake`).
 
-6.  Push to your fork and submit a pull request.
+6.  To check a change against every supported ActiveRecord version, run
+    `bundle exec appraisal install` once, then run the suite with each gemfile
+    in `gemfiles/`. CI does this automatically on pull requests.
 
-I can't guarantee that I will accept the change, but if I don't, I will be sure
-to let you know why.
+7.  Push to your fork and submit a pull request.
 
 Here are some things that will increase the chance that your pull request is
 accepted, taken straight from the Ruby on Rails guide:
@@ -645,9 +666,6 @@ accepted, taken straight from the Ruby on Rails guide:
 -  Include tests that fail without your code, and pass with it
 -  Update the documentation, guides, or whatever is affected by your
    contribution
-
-This gem is a work in progress. I am adding specs as I need features in my
-application. Please add missing ones as you work on features or find bugs!
 
 ## License
 
@@ -661,7 +679,8 @@ Draftsman is released under the [MIT License][9].
 [4]: http://railscasts.com/episodes/416-form-objects
 [5]: http://www.sinatrarb.com/
 [6]: https://github.com/janko-m/sinatra-activerecord
-[7]: https://raw.github.com/jmfederico/draftsman/master/lib/generators/draftsman/templates/create_drafts.rb
+[7]: https://raw.githubusercontent.com/TaskCtrl-AS/draftsman/master/lib/generators/draftsman/templates/create_drafts.rb
 [8]: http://www.sinatrarb.com/intro.html#Modular%20vs.%20Classic%20Style
 [9]: http://www.opensource.org/licenses/MIT
 [10]: http://semver.org/
+[11]: https://github.com/jmfederico/draftsman
