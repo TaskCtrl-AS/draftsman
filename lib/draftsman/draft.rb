@@ -246,11 +246,12 @@ class Draftsman::Draft < ActiveRecord::Base
     # Prefer changeset for refication if it's present.
     elsif self.changeset.present? && self.changeset.any?
       self.changeset.each do |key, value|
-        # Skip counter_cache columns
-        if self.item.respond_to?("#{key}=") && !key.end_with?('_count')
+        next if counter_cache_columns.include?(key)
+
+        if self.item.respond_to?("#{key}=")
           self.item.send("#{key}=", value.last)
-        elsif !key.end_with?('_count')
-          logger.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
+        else
+          logger&.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
         end
       end
 
@@ -262,11 +263,12 @@ class Draftsman::Draft < ActiveRecord::Base
       self.item.class.unserialize_attributes_for_draftsman(attrs)
 
       attrs.each do |key, value|
-        # Skip counter_cache columns
-        if self.item.respond_to?("#{key}=") && !key.end_with?('_count')
+        next if counter_cache_columns.include?(key)
+
+        if self.item.respond_to?("#{key}=")
           self.item.send("#{key}=", value)
-        elsif !key.end_with?('_count')
-          logger.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
+        else
+          logger&.warn("Attribute #{key} does not exist on #{self.item_type} (Draft ID: #{self.id}).")
         end
       end
 
@@ -336,6 +338,19 @@ class Draftsman::Draft < ActiveRecord::Base
   end
 
 private
+
+  # Columns ActiveRecord maintains via `counter_cache`. Reifying them from
+  # drafted data would clobber the live count.
+  def counter_cache_columns
+    @counter_cache_columns ||=
+      self.item.class.reflect_on_all_associations(:has_many).map do |reflection|
+        begin
+          reflection.counter_cache_column.to_s if reflection.has_cached_counter?
+        rescue StandardError
+          nil
+        end
+      end.compact
+  end
 
   # Restores previous draft and returns it.
   def reify_previous_draft
