@@ -148,13 +148,13 @@ module Draftsman
 
       # DEPRECATED: Use `#draft_save` instead.
       def draft_creation
-        ActiveSupport::Deprecation.warn('`#draft_creation` is deprecated and will be removed from Draftsman 1.0. Use `#save_draft` instead.')
+        Draftsman.deprecator.warn('`#draft_creation` is deprecated and will be removed from Draftsman 1.0. Use `#save_draft` instead.')
         _draft_creation
       end
 
       # DEPRECATED: Use `#draft_destruction` instead.
       def draft_destroy
-        ActiveSupport::Deprecation.warn('`#draft_destroy` is deprecated and will be removed from Draftsman 1.0. Use `draft_destruction` instead.')
+        Draftsman.deprecator.warn('`#draft_destroy` is deprecated and will be removed from Draftsman 1.0. Use `draft_destruction` instead.')
 
         run_callbacks :draft_destroy do
           _draft_destruction
@@ -170,7 +170,7 @@ module Draftsman
 
       # DEPRECATED: Use `#draft_save` instead.
       def draft_update
-        ActiveSupport::Deprecation.warn('`#draft_update` is deprecated and will be removed from Draftsman 1.0. Use `#save_draft` instead.')
+        Draftsman.deprecator.warn('`#draft_update` is deprecated and will be removed from Draftsman 1.0. Use `#save_draft` instead.')
         _draft_update
       end
 

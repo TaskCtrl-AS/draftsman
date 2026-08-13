@@ -18,6 +18,12 @@ module Draftsman
     !!Draftsman.config.enabled
   end
 
+  # Draftsman's own deprecator. Rails 7.1 made the class-level
+  # `ActiveSupport::Deprecation.warn` private, so gems own an instance.
+  def self.deprecator
+    @deprecator ||= ActiveSupport::Deprecation.new('1.0', 'Draftsman')
+  end
+
   # Sets whether Draftsman is enabled or disabled for the current request.
   def self.enabled_for_controller=(value)
     draftsman_store[:request_enabled_for_controller] = value
