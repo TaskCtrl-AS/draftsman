@@ -328,7 +328,9 @@ draft.reify
 
 # Returns what changed in this draft. Similar to `ActiveModel::Dirty#changes`.
 # Returns `nil` if your `drafts` table does not have an `object_changes` text
-# column.
+# column. If the stored data cannot be read back, returns an empty hash and
+# logs a warning naming the draft, rather than raising — so one unreadable row
+# does not abort a loop over many drafts.
 draft.changeset
 
 # Returns whether or not this is a `create` event.
@@ -394,6 +396,34 @@ after_draft_destruction   # called after item is destroyed as a draft
 ```
 
 Note that callbacks must be defined after your call to `has_drafts`.
+
+### Turning Draftsman Off
+
+Draftsman is enabled by default. When it is switched off, `#save_draft`
+persists the record normally and records no draft:
+
+```ruby
+Draftsman.enabled = false
+```
+
+`#draft_destruction` is deliberately unaffected — a configuration flag does not
+cause hard deletes. It still trashes the record and records a `destroy` draft.
+
+To switch Draftsman off for particular requests, override
+`draftsman_enabled_for_controller` in your controller:
+
+```ruby
+class ApplicationController < ActionController::Base
+  private
+
+  def draftsman_enabled_for_controller
+    !request.headers['X-Skip-Drafts']
+  end
+end
+```
+
+The per-request setting is only consulted during a request, so drafting still
+works in the console, in rake tasks, and in background jobs.
 
 ## Basic Usage
 
