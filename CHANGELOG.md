@@ -1,5 +1,119 @@
 # CHANGELOG
 
+## Unreleased
+
+Maintained fork at [TaskCtrl-AS/draftsman](https://github.com/TaskCtrl-AS/draftsman).
+Not published to RubyGems; install from git.
+
+### Breaking Changes
+
+- Requires ActiveRecord 7.1+ and Ruby 3.2+. The gemspec previously claimed
+  ActiveRecord 4.2+, but that range was untestable — 4.2 through 6.1 need
+  Ruby 2.x — so nothing verified it. The floor now matches what CI runs.
+  ([#10](https://github.com/TaskCtrl-AS/draftsman/pull/10))
+- Removed the compatibility shims that became unreachable at that floor:
+  `Draftsman.active_record_belongs_to_required?`,
+  `Draftsman.active_record_protected_attributes?`, `lib/support/feature_detection.rb`
+  (which also defined `activerecord_migrations_versioned?` on `Object`), the
+  pre-5.0 `SERIALIZE`/`DESERIALIZE` indirection,
+  `Draftsman::AttributesSerialization::NoOpAttribute` and `SerializedAttribute`,
+  and `without_identity_map`. ([#10](https://github.com/TaskCtrl-AS/draftsman/pull/10))
+
+### Bug Fixes
+
+- `Draft#reify` raised `Psych::DisallowedClass` and `Draft#changeset` silently
+  returned `{}` on Rails 7.0.3.1+. `ActiveRecord.yaml_column_permitted_classes`
+  defaults to `[Symbol]`, but Draftsman writes timestamps and numerics into its
+  serialized columns, so it could not read back its own output. The YAML
+  serializer now permits the classes it writes, unioned with any the host app
+  has configured. ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- `#save_draft` returned `true` when the draft record failed to save.
+  `raise ActiveRecord::Rollback and return false` parses as
+  `(raise …) and (return false)`, so the raise aborted, `transaction` swallowed
+  the rollback, and control reached an unconditional `return true`. The item was
+  rolled back out of the database while the caller was told it succeeded.
+  ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- `#save_draft` rescued `Exception`, swallowing `Interrupt`, `SystemExit`, and
+  `NoMemoryError`. Narrowed to `StandardError`.
+  ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- `Draft#changeset` swallowed every error and returned `{}`, making an
+  unreadable draft indistinguishable from one that changed nothing.
+  ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- `Draftsman::Draft.with_item_keys` called `scoped`, removed in Rails 4, and had
+  raised `NoMethodError` on every call since.
+  ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- `has_drafts draft: :custom_name` was broken in six places that read
+  `item.draft` directly instead of going through the configured association
+  name. The guard immediately before each (`item.draft?`) used the configured
+  name correctly, so the check passed and the next line raised `NoMethodError` —
+  which `_draft_update` then swallowed, silently discarding the edit.
+  ([#4](https://github.com/TaskCtrl-AS/draftsman/pull/4),
+  [#6](https://github.com/TaskCtrl-AS/draftsman/pull/6))
+- `Draftsman.draft_class_name` is global configuration but was stored in
+  fiber-local state. Since `has_drafts` reads it at class-definition time, a
+  model autoloaded lazily on a worker thread — the Rails development default —
+  bound to `Draftsman::Draft` instead of the configured class. Moved to
+  `Draftsman::Config`. ([#5](https://github.com/TaskCtrl-AS/draftsman/pull/5))
+- `whodunnit` and `controller_info` were stored in `Thread.current[]`, which is
+  fiber-local, so state set by a controller filter was invisible inside any
+  fiber. Now uses `ActiveSupport::IsolatedExecutionState`.
+  ([#5](https://github.com/TaskCtrl-AS/draftsman/pull/5))
+- Request-scoped state was never cleared, so a pooled thread carried one
+  request's `whodunnit` into the next request that did not set its own,
+  attributing drafts to the wrong user. A Railtie now clears it around each
+  execution, which covers requests and background jobs.
+  ([#7](https://github.com/TaskCtrl-AS/draftsman/pull/7))
+- `Draft#publish!` and `Draft#revert!` recursed until `SystemStackError` when
+  two records with drafts referenced each other. Both now track visited drafts.
+  ([#6](https://github.com/TaskCtrl-AS/draftsman/pull/6))
+- `#draft_creation`, `#draft_update`, and `#draft_destroy` raised
+  `NoMethodError` on Rails 7.1+, where the class-level
+  `ActiveSupport::Deprecation.warn` became private. The deprecation shim was the
+  thing that broke. Draftsman now owns a deprecator instance.
+  ([#9](https://github.com/TaskCtrl-AS/draftsman/pull/9))
+- `rails g draftsman:install` hardcoded `ActiveRecord::Migration[4.2]`, opting
+  new installs into a legacy compatibility mode that gives `drafts` a 32-bit
+  primary key. The version is now taken from the installed ActiveRecord, and
+  `item_id` is `bigint` rather than `integer`.
+  ([#8](https://github.com/TaskCtrl-AS/draftsman/pull/8))
+- `Draftsman.enabled = false` did not stop drafting. Neither `enabled?` nor
+  `enabled_for_controller?` was consulted anywhere in the draft-writing path;
+  their only reader was `set_draftsman_whodunnit`, so disabling Draftsman merely
+  stopped recording who made the change. `#save_draft` now persists the record
+  without recording a draft when drafting is disabled. `#draft_destruction` is
+  unchanged and still trashes and drafts.
+  ([#11](https://github.com/TaskCtrl-AS/draftsman/pull/11))
+- `Draft#reify` skipped any attribute whose name ends in `_count`, intending to
+  protect `counter_cache` columns but also silently dropping ordinary ones such
+  as `word_count` or `view_count`. The draft stored the change and reported it in
+  the changeset, then publishing discarded it. Counter caches are now identified
+  through ActiveRecord's reflections instead of by name.
+  ([#12](https://github.com/TaskCtrl-AS/draftsman/pull/12))
+- `Draft#changeset` raised on unreadable stored data, so one bad row could abort
+  a caller iterating drafts. Unreadable data is now logged and reported as `{}`,
+  while genuine errors still propagate.
+  ([#13](https://github.com/TaskCtrl-AS/draftsman/pull/13))
+
+### Enhancements
+
+- The test suite runs again. It could not boot at all: `File.exists?` was removed
+  in Ruby 3.4, the dummy app pulled in Sinatra 1.0 via `Bundler.require` (which
+  needs `rack/showexceptions`, gone in Rack 3), `sqlite3 ~> 1.2` conflicted with
+  the Rails 8 adapter, and `enum status: {…}` was removed in Rails 8.
+  ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- CI moved from Travis and CircleCI 1.0 to GitHub Actions, covering ActiveRecord
+  7.1, 7.2, and 8.0 across Ruby 3.2, 3.3, and 3.4.
+  ([#2](https://github.com/TaskCtrl-AS/draftsman/pull/2))
+- README rewritten to match reality: it advertised ActiveRecord 4/5/6 support,
+  told people to install a RubyGems release that does not exist for this fork,
+  carried a dead Travis badge, and claimed both thread safety and automatic
+  `whodunnit` recording that the code did not provide.
+  ([#14](https://github.com/TaskCtrl-AS/draftsman/pull/14))
+- The three `*_col_is_json?` predicates memoized with `||=`, which never caches
+  a `false` result, so they re-scanned `columns_hash` on every call from inside
+  per-attribute loops. Column types are now cached.
+  ([#4](https://github.com/TaskCtrl-AS/draftsman/pull/4))
+
 ## 0.8.0.dev
 
 ### Breaking Changes
